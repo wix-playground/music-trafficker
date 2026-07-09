@@ -236,11 +236,20 @@ export default function DiscoScene({
     [baseTextures],
   );
 
-  const flyerTexture = useMemo(() => {
-    const tex = baseTextures[0]?.clone() ?? new THREE.Texture();
-    tex.needsUpdate = true;
-    return tex;
-  }, [baseTextures]);
+  // The flyer gets a fresh texture object per flight (and per hi-res upgrade):
+  // resizing an already-uploaded texture's image in place triggers GL errors.
+  const flyerMatRef = useRef<THREE.MeshBasicMaterial>(null);
+  const flyerTexRef = useRef<THREE.Texture | null>(null);
+  const setFlyerTexture = (tex: THREE.Texture) => {
+    const old = flyerTexRef.current;
+    flyerTexRef.current = tex;
+    const mat = flyerMatRef.current;
+    if (mat) {
+      mat.map = tex;
+      mat.needsUpdate = true;
+    }
+    if (old && old !== tex) old.dispose();
+  };
 
   const windowSlots = useMemo(
     () => buildWindowSlots(videos.length),
@@ -285,8 +294,9 @@ export default function DiscoScene({
     const index = videos.indexOf(video);
     const base = baseTextures[index];
     if (base) {
-      flyerTexture.image = base.image;
-      flyerTexture.needsUpdate = true;
+      const tex = base.clone();
+      tex.needsUpdate = true;
+      setFlyerTexture(tex);
     }
     // Upgrade the flyer to a hi-res thumbnail if one exists.
     hiResRequestRef.current = video.id;
@@ -296,8 +306,7 @@ export default function DiscoScene({
         if (hiResRequestRef.current !== video.id) return;
         if ((hi.image?.width ?? 0) < 320) return; // 120x90 gray placeholder
         hi.colorSpace = THREE.SRGBColorSpace;
-        flyerTexture.image = hi.image;
-        flyerTexture.needsUpdate = true;
+        setFlyerTexture(hi);
       },
     );
     onTakeoff(video);
@@ -398,9 +407,12 @@ export default function DiscoScene({
       1,
     );
     // Un-crop the thumbnail as it flies out (window crop -> full 16:9 frame).
-    const repeatX = THREE.MathUtils.lerp(CROP_REPEAT_X, 1, k);
-    flyerTexture.repeat.set(repeatX, 1);
-    flyerTexture.offset.set((1 - repeatX) / 2, 0);
+    const flyerTex = flyerTexRef.current;
+    if (flyerTex) {
+      const repeatX = THREE.MathUtils.lerp(CROP_REPEAT_X, 1, k);
+      flyerTex.repeat.set(repeatX, 1);
+      flyerTex.offset.set((1 - repeatX) / 2, 0);
+    }
 
     if (f.t >= 1 && f.mode === "out") {
       f.mode = "hold";
@@ -487,7 +499,7 @@ export default function DiscoScene({
       {/* the tile that flies out to fullscreen */}
       <mesh ref={flyerRef} visible={false} renderOrder={10} raycast={() => null}>
         <planeGeometry args={[1, 1]} />
-        <meshBasicMaterial map={flyerTexture} />
+        <meshBasicMaterial ref={flyerMatRef} />
       </mesh>
 
       <Sparkles

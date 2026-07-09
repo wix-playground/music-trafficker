@@ -1,0 +1,32 @@
+# Build log — Music Trafficker disco ball
+
+Date: 2026-07-09
+
+## What was set up
+
+- **Wix Headless site + Astro project** scaffolded with `npm create @wix/new@latest` (business name "Music Trafficker", blank template). Site id `4df484c7-bb1c-4d2f-990f-0ddf48f7b1ea`. The scaffold's own git-commit step failed (no global git identity on this machine) — expected; fixed with a repo-local `git config`.
+- **Wix agent skills** installed into `.agents/skills/` via `npx skills add wix/skills`.
+- **3D deps**: `three@0.162`, `@react-three/fiber@8.18`, `@react-three/drei@9.122` (React 18 pins), `@react-three/postprocessing@2.16.3` + `postprocessing@6.35.2` (pinned — newer versions require three ≥ 0.168).
+- **YouTube feed**: `src/pages/api/videos.ts` server route; parses the channel's `/videos` tab (`ytInitialData`, full videos only, durations included), RSS + `/shorts/` probe as fallback, 1 h in-memory cache. Channel id resolved once: `UC5D9N79IcFdrPGoymBThZZA`. 30 full videos found; Shorts (e.g. the "Simulated Universe" series) excluded by source.
+- **Scene**: `src/components/disco/` — instanced mirror ball with ~82 thumbnail windows, orbiting spotlights, lightformer env-map, sparkles, bloom/vignette, time-based tile→fullscreen flight animation, YouTube iframe overlay, Escape/✕ to close, drag-to-orbit.
+- **Deployed** with `wix build` + `wix release` → https://music-traf-ab6ea66c-vytenisu.wix-site-host.com
+
+## Bugs found & fixed during browser verification
+
+- Window planes invisible: the dark backing boxes' front faces sat 0.01 world units *in front of* the window planes (occluding them), which masked a second, opposite orientation bug during diagnosis (three.js `Object3D.lookAt` for non-cameras points +Z *at* the target, so tangent planes need a `rotateY(π)` flip). Fixed both.
+- `GL_INVALID_VALUE: glTexSubImage2D` warnings when the flyer upgraded to the hi-res thumbnail: swapping a larger image into an already-uploaded texture resizes immutable GPU storage. Fixed by giving the flyer a fresh `THREE.Texture` per flight/upgrade and disposing the old one.
+- Redundant `allowFullScreen` attribute warning on the iframe — removed (the `allow` list already grants fullscreen).
+
+## Verified (chrome-devtools MCP, local + live)
+
+- Ball spins with thumbnails visible, ~60 fps feel, desktop (1280×800) and mobile (390×844) — whole ball fits on both (camera distance adapts to aspect).
+- Click on a tile → tile flies smoothly to a letterboxed fullscreen rect → YouTube iframe fades in → video plays **from 0:00 with sound** (verified via progressing video frames and the player's `[music]` caption; autoplay-with-sound worked in the test browser).
+- ✕ / Escape closes: iframe removed (audio stops), tile flies back, ball resumes spinning.
+- Console: no errors from site code. Two external notes below.
+
+## Known notes / unresolved
+
+- **`frog.wix.com` beacon** (Wix's own BI telemetry, plain-HTTP) is refused on this office network → one `ERR_CONNECTION_REFUSED` console error that is not from site code and is environment-specific.
+- **`releasePointerCapture` errors seen during verification only** — an artifact of the *synthetic* pointer events used to drive the canvas from DevTools; real mouse/touch input doesn't produce them.
+- **Autoplay with sound on real mobile devices** may still be blocked by stricter browser policies (the user then just taps the play button in the player). Desktop Chrome played with sound.
+- YouTube page-markup parsing could break if YouTube changes `ytInitialData`/`lockupViewModel`; the RSS fallback keeps the site functional (latest 15 videos) if that happens.

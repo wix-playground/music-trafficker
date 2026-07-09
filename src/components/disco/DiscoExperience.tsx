@@ -98,7 +98,6 @@ export default function DiscoExperience() {
             src={`https://www.youtube.com/embed/${active.id}?autoplay=1&start=0&rel=0&playsinline=1`}
             title={active.title}
             allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
-            allowFullScreen
           />
           <div className="disco-player-title">{active.title}</div>
           <button className="disco-close" onClick={close} aria-label="Back to the disco ball">
