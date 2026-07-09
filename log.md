@@ -2,6 +2,13 @@
 
 Date: 2026-07-09
 
+## Update 4 (same day): discussion popup + members
+
+- Installed **Wix Blog** + **Wix Members Area** apps (apps-installer API), seeded one published post "What do you think of AI music?" (id `7ed6fe11-3420-4585-9a20-56b61cf03626`).
+- New `/api/thread` route: GET lists comments (public, newest first, author names via `@wix/members`), POST creates a comment (member-gated, 401 for anonymous). Comments key on the **post id** — this fresh Blog V3 site has no `referenceId` (that field only exists on legacy-migrated posts); verified by creating/listing/deleting a probe comment via REST.
+- UI: "What do you think of AI music?" button under the ball → translucent popup (composer when logged in, login CTA otherwise); log in/out chip top-right using the built-in `/api/auth/*` routes. Disco ball behavior untouched.
+- **Verified**: popup + empty thread + anon-post rejection live (desktop & 390×844); login link reaches the Wix-hosted login/signup dialog. **Not verified end-to-end**: posting as a logged-in member — Wix signup requires solving a reCAPTCHA, which an automated agent can't (and shouldn't) do. The comment write path itself was verified at the API level; if member posting misbehaves, check Blog comment moderation settings in the dashboard first.
+
 ## Update 3 (same day): natural-speed previews
 
 User feedback: fast storyboard playback looked sped-up (frames are ~2 s apart in the source), slow playback looked laggy. Fix is two-tier:

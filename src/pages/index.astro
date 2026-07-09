@@ -169,4 +169,311 @@ import DiscoExperience from "../components/disco/DiscoExperience";
 		background: rgba(255, 45, 149, 0.35);
 		box-shadow: 0 0 24px rgba(255, 45, 149, 0.5);
 	}
+
+	/* ---- auth chip ---- */
+
+	.disco-auth {
+		position: absolute;
+		top: max(16px, env(safe-area-inset-top));
+		right: max(16px, env(safe-area-inset-right));
+		z-index: 3;
+		transition: opacity 0.4s ease;
+		font-size: 0.78rem;
+		letter-spacing: 0.08em;
+	}
+
+	.disco-auth.hidden {
+		opacity: 0;
+		pointer-events: none;
+	}
+
+	.disco-auth a,
+	.disco-auth form {
+		display: inline-flex;
+		align-items: center;
+		gap: 10px;
+		padding: 8px 16px;
+		border-radius: 999px;
+		border: 1px solid rgba(255, 255, 255, 0.18);
+		background: rgba(12, 8, 26, 0.55);
+		backdrop-filter: blur(10px);
+		color: rgba(230, 222, 250, 0.85);
+		text-decoration: none;
+	}
+
+	.disco-auth a:hover {
+		border-color: rgba(255, 45, 149, 0.6);
+		color: #fff;
+	}
+
+	.disco-auth form span {
+		max-width: 160px;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		color: rgba(230, 222, 250, 0.6);
+	}
+
+	.disco-auth form button {
+		border: 0;
+		background: none;
+		color: #ffd7ec;
+		font: inherit;
+		letter-spacing: inherit;
+		cursor: pointer;
+		padding: 0;
+	}
+
+	.disco-auth form button:hover {
+		text-shadow: 0 0 12px rgba(255, 45, 149, 0.8);
+	}
+
+	/* ---- thread button + popup ---- */
+
+	.thread-open {
+		position: absolute;
+		bottom: max(22px, env(safe-area-inset-bottom));
+		left: 50%;
+		transform: translateX(-50%);
+		z-index: 3;
+		padding: 12px 26px;
+		border-radius: 999px;
+		border: 1px solid rgba(255, 45, 149, 0.45);
+		background: rgba(12, 8, 26, 0.6);
+		backdrop-filter: blur(10px);
+		color: #ffd7ec;
+		font-family: "Inter", system-ui, sans-serif;
+		font-size: 0.86rem;
+		letter-spacing: 0.14em;
+		text-transform: uppercase;
+		cursor: pointer;
+		transition: opacity 0.4s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+		box-shadow: 0 0 18px rgba(255, 45, 149, 0.25);
+	}
+
+	.thread-open:hover {
+		border-color: rgba(255, 45, 149, 0.9);
+		box-shadow: 0 0 32px rgba(255, 45, 149, 0.5);
+	}
+
+	.thread-open.hidden {
+		opacity: 0;
+		pointer-events: none;
+	}
+
+	.thread-backdrop {
+		position: fixed;
+		inset: 0;
+		z-index: 6;
+		background: rgba(4, 2, 10, 0.45);
+		backdrop-filter: blur(4px);
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		padding: 18px;
+	}
+
+	.thread-popup {
+		position: relative;
+		width: min(680px, 94vw);
+		max-height: min(78vh, 720px);
+		display: flex;
+		flex-direction: column;
+		padding: 28px 28px 20px;
+		border-radius: 20px;
+		border: 1px solid rgba(255, 255, 255, 0.14);
+		background: rgba(14, 9, 30, 0.82);
+		backdrop-filter: blur(18px);
+		box-shadow: 0 24px 80px rgba(0, 0, 0, 0.6), 0 0 60px rgba(122, 48, 214, 0.25);
+	}
+
+	.thread-popup h2 {
+		margin: 0 36px 4px 0;
+		font-size: 1.25rem;
+		font-weight: 600;
+		color: #ffd7ec;
+		text-shadow: 0 0 18px rgba(255, 45, 149, 0.5);
+	}
+
+	.thread-sub {
+		margin: 0 0 16px;
+		font-size: 0.78rem;
+		letter-spacing: 0.12em;
+		text-transform: uppercase;
+		color: rgba(210, 200, 240, 0.55);
+	}
+
+	.thread-close {
+		position: absolute;
+		top: 14px;
+		right: 14px;
+		width: 38px;
+		height: 38px;
+		border-radius: 50%;
+		border: 1px solid rgba(255, 255, 255, 0.2);
+		background: rgba(255, 255, 255, 0.06);
+		color: #fff;
+		cursor: pointer;
+		transition: background 0.15s ease;
+	}
+
+	.thread-close:hover {
+		background: rgba(255, 45, 149, 0.3);
+	}
+
+	.thread-composer textarea {
+		width: 100%;
+		box-sizing: border-box;
+		min-height: 72px;
+		resize: vertical;
+		padding: 12px 14px;
+		border-radius: 12px;
+		border: 1px solid rgba(255, 255, 255, 0.16);
+		background: rgba(255, 255, 255, 0.06);
+		color: #eae6f7;
+		font: inherit;
+		font-size: 0.92rem;
+	}
+
+	.thread-composer textarea:focus {
+		outline: none;
+		border-color: rgba(255, 45, 149, 0.6);
+	}
+
+	.thread-composer-row {
+		display: flex;
+		align-items: center;
+		justify-content: flex-end;
+		gap: 14px;
+		margin: 10px 0 4px;
+	}
+
+	.thread-error {
+		color: #ff8fb8;
+		font-size: 0.8rem;
+	}
+
+	.thread-post {
+		padding: 9px 26px;
+		border-radius: 999px;
+		border: 0;
+		background: linear-gradient(100deg, #ff2d95, #7a30d6);
+		color: #fff;
+		font: inherit;
+		font-size: 0.85rem;
+		letter-spacing: 0.1em;
+		text-transform: uppercase;
+		cursor: pointer;
+		transition: filter 0.15s ease, opacity 0.15s ease;
+	}
+
+	.thread-post:hover:not(:disabled) {
+		filter: brightness(1.15);
+	}
+
+	.thread-post:disabled {
+		opacity: 0.45;
+		cursor: default;
+	}
+
+	.thread-login-cta {
+		display: block;
+		padding: 14px;
+		border-radius: 12px;
+		border: 1px dashed rgba(255, 45, 149, 0.5);
+		text-align: center;
+		color: #ffd7ec;
+		text-decoration: none;
+		font-size: 0.9rem;
+		letter-spacing: 0.08em;
+	}
+
+	.thread-login-cta:hover {
+		background: rgba(255, 45, 149, 0.12);
+	}
+
+	.thread-messages {
+		margin-top: 16px;
+		overflow-y: auto;
+		display: flex;
+		flex-direction: column;
+		gap: 12px;
+		padding-right: 6px;
+		scrollbar-width: thin;
+		scrollbar-color: rgba(255, 45, 149, 0.4) transparent;
+	}
+
+	.thread-empty {
+		color: rgba(210, 200, 240, 0.5);
+		text-align: center;
+		font-size: 0.88rem;
+		padding: 18px 0;
+	}
+
+	.thread-msg {
+		padding: 12px 14px;
+		border-radius: 12px;
+		background: rgba(255, 255, 255, 0.05);
+		border: 1px solid rgba(255, 255, 255, 0.07);
+	}
+
+	.thread-msg.mine {
+		border-color: rgba(255, 45, 149, 0.35);
+	}
+
+	.thread-msg p {
+		margin: 8px 0 0;
+		font-size: 0.92rem;
+		line-height: 1.5;
+		color: rgba(234, 230, 247, 0.92);
+		white-space: pre-wrap;
+		word-break: break-word;
+	}
+
+	.thread-msg-head {
+		display: flex;
+		align-items: center;
+		gap: 9px;
+		font-size: 0.82rem;
+	}
+
+	.thread-msg-head img,
+	.thread-avatar-fallback {
+		width: 26px;
+		height: 26px;
+		border-radius: 50%;
+		object-fit: cover;
+	}
+
+	.thread-avatar-fallback {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		background: linear-gradient(130deg, #ff2d95, #2da8ff);
+		color: #fff;
+		font-size: 0.75rem;
+		font-weight: 600;
+	}
+
+	.thread-msg-head strong {
+		color: #fff;
+		font-weight: 600;
+	}
+
+	.thread-time {
+		color: rgba(210, 200, 240, 0.45);
+	}
+
+	@media (max-width: 560px) {
+		.thread-open {
+			font-size: 0.72rem;
+			padding: 10px 18px;
+			width: max-content;
+			max-width: 92vw;
+		}
+
+		.thread-popup {
+			padding: 20px 16px 14px;
+		}
+	}
 </style>

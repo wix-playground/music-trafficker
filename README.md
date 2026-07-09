@@ -36,6 +36,15 @@ Storyboard sprite sheets are the seek-preview images every video has: one 800×4
 - `GET /api/storyboard-image?v=<id>` proxies the sheet bytes (i.ytimg.com sends no CORS headers, so the browser can't texture from it directly) with a long CDN cache.
 - The client loads each sheet as one texture and animates it by shifting UV offsets over the grid (~8–12 fps, staggered per video) — zero per-frame uploads or decoding.
 
+### Discussion thread ("What do you think of AI music?")
+
+A button under the ball opens a translucent popup with a single discussion thread, newest messages first. It's backed by real Wix modules:
+
+- **Wix Blog** hosts one seeded post ("What do you think of AI music?"); **Wix Comments** stores the messages, keyed to that post (on fresh Blog V3 sites comments key on the post id — `referenceId` only exists on legacy-migrated posts).
+- `GET /api/thread` — public read (`comments.listCommentsByResource`, `NEWEST_FIRST`) + current-member info; `POST /api/thread` — member-gated (`members.getCurrentMember` → `comments.createComment` with a Ricos body).
+- Login/logout use the built-in `@wix/astro` routes (`/api/auth/login`, `/api/auth/logout`) — the Wix-hosted login page registers new members too. A chip in the top-right shows the state.
+- **Wix Members Area** app is installed so commenter names/avatars resolve.
+
 ### Live feed auto-update
 
 The server re-scrapes the channel every 15 minutes; the client re-polls `/api/videos` (every 10 s until all storyboards are attached, then every 5 minutes) and hot-swaps new videos into the ball without remounting the scene — a swap is deferred while a video is playing.

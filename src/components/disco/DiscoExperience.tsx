@@ -1,6 +1,7 @@
 import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { Canvas } from "@react-three/fiber";
 import DiscoScene, { type SceneApi } from "./DiscoScene";
+import ThreadPopup from "./ThreadPopup";
 import type { VideoItem } from "./types";
 
 type Phase = "idle" | "flying" | "playing" | "closing";
@@ -24,6 +25,8 @@ export default function DiscoExperience() {
   const [failed, setFailed] = useState(false);
   const [phase, setPhase] = useState<Phase>("idle");
   const [active, setActive] = useState<VideoItem | null>(null);
+  const [threadOpen, setThreadOpen] = useState(false);
+  const [me, setMe] = useState<{ name: string } | null>(null);
   const sceneApi = useRef<SceneApi | null>(null);
   const videosRef = useRef<VideoItem[] | null>(null);
   const phaseRef = useRef<Phase>("idle");
@@ -105,11 +108,21 @@ export default function DiscoExperience() {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") close();
+      if (e.key !== "Escape") return;
+      if (threadOpen) setThreadOpen(false);
+      else close();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [close]);
+  }, [close, threadOpen]);
+
+  // Current member (drives the log-in / log-out chip).
+  useEffect(() => {
+    fetch("/api/thread")
+      .then((r) => r.json())
+      .then((d) => setMe(d?.me ?? null))
+      .catch(() => {});
+  }, []);
 
   if (failed) {
     return (
@@ -151,6 +164,26 @@ export default function DiscoExperience() {
         <h1>MUSIC TRAFFICKER</h1>
         <p>a spinning ball of songs — click a window to play</p>
       </header>
+
+      <div className={`disco-auth ${phase === "idle" ? "" : "hidden"}`}>
+        {me ? (
+          <form method="POST" action="/api/auth/logout?returnUrl=/">
+            <span>{me.name}</span>
+            <button type="submit">Log out</button>
+          </form>
+        ) : (
+          <a href="/api/auth/login?returnUrl=/">Log in</a>
+        )}
+      </div>
+
+      <button
+        className={`thread-open ${phase === "idle" ? "" : "hidden"}`}
+        onClick={() => setThreadOpen(true)}
+      >
+        What do you think of AI music?
+      </button>
+
+      {threadOpen && <ThreadPopup onClose={() => setThreadOpen(false)} />}
 
       {active && (phase === "playing" || phase === "closing") && (
         <div className={`disco-player ${phase === "playing" ? "visible" : ""}`}>
