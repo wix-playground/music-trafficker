@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import LoginLink from "./LoginLink";
 
 interface ThreadMessage {
   id: string;
@@ -145,9 +146,10 @@ export default function ThreadPopup({ onClose }: { onClose: () => void }) {
             </div>
           </div>
         ) : (
-          <a className="thread-login-cta" href="/api/auth/login?returnUrl=/">
-            Log in to join the conversation
-          </a>
+          <LoginLink
+            className="thread-login-cta"
+            label="Log in to join the conversation"
+          />
         )}
 
         <div

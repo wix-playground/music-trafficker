@@ -2,6 +2,7 @@ import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { Canvas } from "@react-three/fiber";
 import DiscoScene, { type SceneApi } from "./DiscoScene";
 import ThreadPopup from "./ThreadPopup";
+import LoginLink from "./LoginLink";
 import type { VideoItem } from "./types";
 
 type Phase = "idle" | "flying" | "playing" | "closing";
@@ -9,6 +10,29 @@ type Phase = "idle" | "flying" | "playing" | "closing";
 const FAST_POLL_MS = 10_000; // while storyboards are still resolving
 const SLOW_POLL_MS = 5 * 60_000; // steady state: pick up newly published videos
 const MAX_FAST_POLLS = 40;
+
+function LogoutForm({ name }: { name: string }) {
+  const [busy, setBusy] = useState(false);
+  return (
+    <form
+      method="POST"
+      action="/api/auth/logout?returnUrl=/"
+      onSubmit={(e) => {
+        if (busy) {
+          e.preventDefault();
+          return;
+        }
+        setBusy(true);
+      }}
+    >
+      <span>{name}</span>
+      <button type="submit" disabled={busy}>
+        {busy && <span className="auth-spinner" aria-hidden="true" />}
+        {busy ? "Logging out…" : "Log out"}
+      </button>
+    </form>
+  );
+}
 
 function feedChanged(current: VideoItem[] | null, incoming: VideoItem[]) {
   if (!current || current.length !== incoming.length) return true;
@@ -167,12 +191,9 @@ export default function DiscoExperience() {
 
       <div className={`disco-auth ${phase === "idle" ? "" : "hidden"}`}>
         {me ? (
-          <form method="POST" action="/api/auth/logout?returnUrl=/">
-            <span>{me.name}</span>
-            <button type="submit">Log out</button>
-          </form>
+          <LogoutForm name={me.name} />
         ) : (
-          <a href="/api/auth/login?returnUrl=/">Log in</a>
+          <LoginLink label="Log in" />
         )}
       </div>
 

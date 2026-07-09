@@ -201,6 +201,10 @@ import DiscoExperience from "../components/disco/DiscoExperience";
 		text-decoration: none;
 	}
 
+	.disco-auth form {
+		gap: 0;
+	}
+
 	.disco-auth a:hover {
 		border-color: rgba(255, 45, 149, 0.6);
 		color: #fff;
@@ -215,13 +219,46 @@ import DiscoExperience from "../components/disco/DiscoExperience";
 	}
 
 	.disco-auth form button {
-		border: 0;
+		display: inline-flex;
+		align-items: center;
+		gap: 8px;
 		background: none;
 		color: #ffd7ec;
 		font: inherit;
 		letter-spacing: inherit;
 		cursor: pointer;
-		padding: 0;
+		/* separated from the nickname by a divider + breathing room */
+		margin-left: 14px;
+		padding: 0 0 0 14px;
+		border: 0;
+		border-left: 1px solid rgba(255, 255, 255, 0.18);
+		border-radius: 0;
+	}
+
+	/* ---- auth navigation spinner ---- */
+
+	.auth-spinner {
+		display: inline-block;
+		width: 12px;
+		height: 12px;
+		border-radius: 50%;
+		border: 2px solid rgba(255, 215, 236, 0.3);
+		border-top-color: #ffd7ec;
+		animation: auth-spin 0.7s linear infinite;
+		flex: none;
+	}
+
+	@keyframes auth-spin {
+		to { transform: rotate(360deg); }
+	}
+
+	.auth-busy {
+		pointer-events: none;
+		opacity: 0.75;
+	}
+
+	.disco-auth a {
+		gap: 8px;
 	}
 
 	.disco-auth form button:hover {
