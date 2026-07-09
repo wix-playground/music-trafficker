@@ -219,6 +219,8 @@ export default function DiscoScene({
   const spot1 = useRef<THREE.SpotLight>(null);
   const spot2 = useRef<THREE.SpotLight>(null);
   const spot3 = useRef<THREE.SpotLight>(null);
+  const ambientRef = useRef<THREE.AmbientLight>(null);
+  const fillRef = useRef<THREE.PointLight>(null);
   const speedRef = useRef(SPIN_SPEED);
   const introRef = useRef(0);
   const camera = useThree((s) => s.camera) as THREE.PerspectiveCamera;
@@ -492,7 +494,7 @@ export default function DiscoScene({
       // Self-heal: a resize/interaction race left the camera in a bad spot
       // (inside the ball, absurdly far, or NaN) — snap back to a sane pose.
       camera.up.set(0, 1, 0);
-      camera.position.set(0, 0.35, fitZ);
+      camera.position.set(0, 0.15, fitZ);
       camera.lookAt(0, 0, 0);
     } else {
       camera.position.setLength(
@@ -504,6 +506,14 @@ export default function DiscoScene({
       camera.aspect = aspect;
       camera.updateProjectionMatrix();
     }
+
+    // Narrow viewports push the camera far out, which reads dim (smaller
+    // bloom footprint, lights fixed near the ball) — compensate with exposure
+    // and fill light proportional to the extra distance.
+    const farFactor = THREE.MathUtils.clamp((fitZ - 6) / 8, 0, 1);
+    state.gl.toneMappingExposure = 1 + farFactor * 0.4;
+    if (ambientRef.current) ambientRef.current.intensity = 0.15 + farFactor * 0.25;
+    if (fillRef.current) fillRef.current.intensity = 0.4 + farFactor * 0.5;
 
     // Advance every tile's preview (real motion or crossfading storyboard).
     for (const pres of presentationsRef.current.values()) pres.update(delta);
@@ -573,8 +583,8 @@ export default function DiscoScene({
     <>
       <color attach="background" args={["#070310"]} />
       <fog attach="fog" args={["#070310", 9, 20]} />
-      <ambientLight intensity={0.15} />
-      <pointLight position={[0, 1, 6]} intensity={0.4} decay={0} color="#8fb0ff" />
+      <ambientLight ref={ambientRef} intensity={0.15} />
+      <pointLight ref={fillRef} position={[0, 1, 6]} intensity={0.4} decay={0} color="#8fb0ff" />
       <primitive object={spotTarget} position={[0, 0, 0]} />
       <spotLight ref={spot1} color="#ff2d95" intensity={5} angle={0.5} penumbra={0.7} decay={0} target={spotTarget} />
       <spotLight ref={spot2} color="#2da8ff" intensity={4.5} angle={0.5} penumbra={0.7} decay={0} target={spotTarget} />

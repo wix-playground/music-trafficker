@@ -171,7 +171,7 @@ export default function DiscoExperience() {
       <Canvas
         dpr={[1, 2]}
         gl={{ antialias: false, powerPreference: "high-performance" }}
-        camera={{ fov: 42, position: [0, 0.35, 11], near: 0.1, far: 50 }}
+        camera={{ fov: 42, position: [0, 0.15, 11], near: 0.1, far: 50 }}
       >
         <Suspense fallback={null}>
           <DiscoScene
