@@ -13,6 +13,7 @@ interface ThreadMessage {
 interface ThreadData {
   title: string;
   messages: ThreadMessage[];
+  nextCursor: string | null;
   me: { name: string } | null;
 }
 
@@ -30,8 +31,10 @@ export default function ThreadPopup({ onClose }: { onClose: () => void }) {
   const [failed, setFailed] = useState(false);
   const [draft, setDraft] = useState("");
   const [posting, setPosting] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [postError, setPostError] = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const loadingMoreRef = useRef(false);
 
   const load = useCallback(() => {
     fetch("/api/thread")
@@ -44,6 +47,38 @@ export default function ThreadPopup({ onClose }: { onClose: () => void }) {
   }, []);
 
   useEffect(load, [load]);
+
+  const loadMore = useCallback(() => {
+    if (loadingMoreRef.current) return;
+    setData((current) => {
+      if (!current?.nextCursor) return current;
+      loadingMoreRef.current = true;
+      setLoadingMore(true);
+      fetch(`/api/thread?cursor=${encodeURIComponent(current.nextCursor)}`)
+        .then((r) => r.json())
+        .then((page: ThreadData & { error?: string }) => {
+          if (page?.error) return;
+          setData((prev) => {
+            if (!prev) return prev;
+            const seen = new Set(prev.messages.map((m) => m.id));
+            return {
+              ...prev,
+              messages: [
+                ...prev.messages,
+                ...page.messages.filter((m) => !seen.has(m.id)),
+              ],
+              nextCursor: page.nextCursor,
+            };
+          });
+        })
+        .catch(() => {})
+        .finally(() => {
+          loadingMoreRef.current = false;
+          setLoadingMore(false);
+        });
+      return current;
+    });
+  }, []);
 
   const submit = useCallback(async () => {
     const text = draft.trim();
@@ -115,7 +150,15 @@ export default function ThreadPopup({ onClose }: { onClose: () => void }) {
           </a>
         )}
 
-        <div className="thread-messages">
+        <div
+          className="thread-messages"
+          onScroll={(e) => {
+            const el = e.currentTarget;
+            if (el.scrollHeight - el.scrollTop - el.clientHeight < 120) {
+              loadMore();
+            }
+          }}
+        >
           {failed && <p className="thread-empty">The thread failed to load. Try again later.</p>}
           {!failed && !data && <p className="thread-empty">Loading the conversation…</p>}
           {data && data.messages.length === 0 && (
@@ -140,6 +183,10 @@ export default function ThreadPopup({ onClose }: { onClose: () => void }) {
               <p>{m.text}</p>
             </div>
           ))}
+          {loadingMore && <p className="thread-empty">Loading more…</p>}
+          {data && !data.nextCursor && data.messages.length > 20 && (
+            <p className="thread-empty">That's everyone's take so far.</p>
+          )}
         </div>
       </div>
     </div>

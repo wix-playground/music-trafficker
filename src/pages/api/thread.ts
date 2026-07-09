@@ -53,8 +53,9 @@ async function getCurrentMemberSafe() {
   }
 }
 
-export const GET: APIRoute = async () => {
+export const GET: APIRoute = async ({ url }) => {
   try {
+    const cursor = url.searchParams.get("cursor");
     const [reference, me] = await Promise.all([
       getThreadReference(),
       getCurrentMemberSafe(),
@@ -63,7 +64,7 @@ export const GET: APIRoute = async () => {
       contextId: reference.referenceId,
       resourceId: reference.referenceId,
       commentSort: { order: "NEWEST_FIRST" as any },
-      cursorPaging: { limit: 50 },
+      cursorPaging: cursor ? { limit: 20, cursor } : { limit: 20 },
     });
     const items: ThreadMessage[] = await Promise.all(
       (result.comments ?? []).map(async (comment: any) => {
@@ -81,10 +82,14 @@ export const GET: APIRoute = async () => {
         };
       }),
     );
+    const paging: any = (result as any).pagingMetadata;
+    const nextCursor =
+      paging?.hasNext && paging?.cursors?.next ? paging.cursors.next : null;
     return new Response(
       JSON.stringify({
         title: reference.title,
         messages: items,
+        nextCursor,
         me: me
           ? { name: me.profile?.nickname || me.loginEmail || "Member" }
           : null,
