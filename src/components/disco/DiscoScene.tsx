@@ -313,7 +313,7 @@ export default function DiscoScene({
               frames: Math.max(1, sb.frames),
               frame: Math.floor(Math.random() * sb.frames),
               acc: Math.random() * 0.12,
-              fps: 8 + Math.random() * 4,
+              fps: 2.5 + Math.random() * 1.5,
             };
             tex.repeat.set((CROP_REPEAT_X * 1) / sb.cols, 1 / sb.rows);
             applyFlipbookFrame(animator);
