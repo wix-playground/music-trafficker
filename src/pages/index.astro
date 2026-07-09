@@ -1,8 +1,172 @@
 ---
-import Welcome from '../components/Welcome.astro';
-import Layout from '../layouts/Layout.astro';
+import Layout from "../layouts/Layout.astro";
+import DiscoExperience from "../components/disco/DiscoExperience";
 ---
 
 <Layout>
-	<Welcome />
+	<DiscoExperience client:only="react" />
 </Layout>
+
+<style is:global>
+	:root {
+		--bg: #070310;
+		--pink: #ff2d95;
+		--blue: #2da8ff;
+	}
+
+	html,
+	body {
+		height: 100%;
+		overflow: hidden;
+		background: var(--bg);
+		color: #eae6f7;
+		font-family: "Inter", system-ui, sans-serif;
+	}
+
+	.disco-stage {
+		position: fixed;
+		inset: 0;
+		height: 100dvh;
+	}
+
+	.disco-stage canvas {
+		display: block;
+	}
+
+	/* subtle floor glow + vignette on top of the canvas */
+	.disco-stage::after {
+		content: "";
+		position: absolute;
+		inset: 0;
+		pointer-events: none;
+		background:
+			radial-gradient(60% 35% at 50% 108%, rgba(122, 48, 214, 0.22), transparent 70%),
+			radial-gradient(120% 120% at 50% 50%, transparent 60%, rgba(0, 0, 0, 0.5) 100%);
+	}
+
+	.disco-header {
+		position: absolute;
+		top: max(18px, env(safe-area-inset-top));
+		left: 0;
+		right: 0;
+		text-align: center;
+		pointer-events: none;
+		transition: opacity 0.5s ease, transform 0.5s ease;
+		z-index: 2;
+	}
+
+	.disco-header.hidden {
+		opacity: 0;
+		transform: translateY(-12px);
+	}
+
+	.disco-header h1 {
+		margin: 0;
+		font-family: "Monoton", "Inter", cursive;
+		font-weight: 400;
+		font-size: clamp(1.5rem, 4.5vw, 3.2rem);
+		letter-spacing: 0.14em;
+		color: #ffd7ec;
+		text-shadow:
+			0 0 12px rgba(255, 45, 149, 0.85),
+			0 0 45px rgba(255, 45, 149, 0.5),
+			0 0 90px rgba(45, 168, 255, 0.45);
+	}
+
+	.disco-header p {
+		margin: 0.5em 0 0;
+		font-size: clamp(0.72rem, 1.6vw, 0.92rem);
+		letter-spacing: 0.32em;
+		text-transform: uppercase;
+		color: rgba(210, 200, 240, 0.62);
+	}
+
+	.disco-status {
+		position: fixed;
+		inset: 0;
+		display: flex;
+		flex-direction: column;
+		gap: 22px;
+		align-items: center;
+		justify-content: center;
+		background: var(--bg);
+		letter-spacing: 0.28em;
+		text-transform: uppercase;
+		font-size: 0.8rem;
+		color: rgba(210, 200, 240, 0.7);
+	}
+
+	.disco-loader {
+		width: 54px;
+		height: 54px;
+		border-radius: 50%;
+		background:
+			radial-gradient(circle at 35% 30%, rgba(255, 255, 255, 0.9), rgba(160, 170, 220, 0.25) 45%, rgba(40, 30, 80, 0.9)),
+			conic-gradient(#ff2d95, #2da8ff, #b26bff, #ff2d95);
+		background-blend-mode: overlay;
+		box-shadow:
+			0 0 30px rgba(255, 45, 149, 0.55),
+			0 0 60px rgba(45, 168, 255, 0.35);
+		animation: disco-pulse 1.2s ease-in-out infinite;
+	}
+
+	@keyframes disco-pulse {
+		0%, 100% { transform: scale(1); }
+		50% { transform: scale(1.12); }
+	}
+
+	.disco-player {
+		position: fixed;
+		inset: 0;
+		background: #000;
+		opacity: 0;
+		transition: opacity 0.24s ease;
+		z-index: 10;
+	}
+
+	.disco-player.visible {
+		opacity: 1;
+	}
+
+	.disco-player iframe {
+		width: 100%;
+		height: 100%;
+		border: 0;
+	}
+
+	.disco-player-title {
+		position: absolute;
+		left: max(20px, env(safe-area-inset-left));
+		bottom: max(64px, calc(env(safe-area-inset-bottom) + 64px));
+		max-width: 60%;
+		font-size: 0.82rem;
+		letter-spacing: 0.18em;
+		text-transform: uppercase;
+		color: rgba(230, 222, 250, 0.75);
+		text-shadow: 0 1px 8px rgba(0, 0, 0, 0.8);
+		pointer-events: none;
+	}
+
+	.disco-close {
+		position: absolute;
+		top: max(16px, env(safe-area-inset-top));
+		right: max(16px, env(safe-area-inset-right));
+		width: 52px;
+		height: 52px;
+		border-radius: 50%;
+		border: 1px solid rgba(255, 255, 255, 0.28);
+		background: rgba(10, 6, 22, 0.55);
+		backdrop-filter: blur(10px);
+		color: #fff;
+		font-size: 1.15rem;
+		line-height: 1;
+		cursor: pointer;
+		transition: transform 0.18s ease, background 0.18s ease, box-shadow 0.18s ease;
+	}
+
+	.disco-close:hover {
+		transform: scale(1.08);
+		background: rgba(255, 45, 149, 0.35);
+		box-shadow: 0 0 24px rgba(255, 45, 149, 0.5);
+	}
+</style>
