@@ -13,7 +13,9 @@ function feedChanged(current: VideoItem[] | null, incoming: VideoItem[]) {
   if (!current || current.length !== incoming.length) return true;
   return incoming.some(
     (v, i) =>
-      v.id !== current[i].id || !!v.storyboard !== !!current[i].storyboard,
+      v.id !== current[i].id ||
+      !!v.storyboard !== !!current[i].storyboard ||
+      !!v.motionPreview !== !!current[i].motionPreview,
   );
 }
 

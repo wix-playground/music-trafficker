@@ -94,6 +94,50 @@ const SNAPSHOT = snapshot as Record<
   { sheetUrl: string; meta: StoryboardMeta }
 >;
 
+// ---- Animated hover previews (an_webp) ------------------------------------
+// Short clips of real consecutive video frames (~3s @ ~10fps). Their signed
+// URLs appear on the channel's /videos page, which datacenter IPs can fetch.
+
+const motionUrls = new Map<string, string>();
+let lastMotionRefresh = 0;
+
+export function setMotionPreviewUrls(entries: Iterable<[string, string]>) {
+  for (const [id, url] of entries) motionUrls.set(id, url);
+  lastMotionRefresh = Date.now();
+}
+
+export function hasMotionPreview(id: string): boolean {
+  return motionUrls.has(id);
+}
+
+export function extractMotionUrls(html: string): Map<string, string> {
+  const found = new Map<string, string>();
+  const re = /https:\\?\/\\?\/i\.ytimg\.com\\?\/an_webp\\?\/([A-Za-z0-9_-]{6,20})\\?\/[^"\\]+(?:\\u0026[^"\\]+)*/g;
+  for (const match of html.matchAll(re)) {
+    const url = match[0].replace(/\\u0026/g, "&").replace(/\\\//g, "/");
+    if (!found.has(match[1])) found.set(match[1], url);
+  }
+  return found;
+}
+
+export async function getMotionPreviewUrl(id: string): Promise<string | null> {
+  const cached = motionUrls.get(id);
+  if (cached) return cached;
+  // Cold instance or new video: re-scan the channel page (at most every 5 min).
+  if (Date.now() - lastMotionRefresh < 5 * 60 * 1000) return null;
+  lastMotionRefresh = Date.now();
+  try {
+    const res = await fetch("https://www.youtube.com/@MusicTrafficker/videos", {
+      headers: YT_HEADERS,
+    });
+    if (!res.ok) return null;
+    setMotionPreviewUrls(extractMotionUrls(await res.text()));
+    return motionUrls.get(id) ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export async function getStoryboardEntry(id: string): Promise<SbEntry> {
   const cached = sbCache.get(id);
   if (cached && isFresh(cached)) return cached;

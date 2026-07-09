@@ -23,9 +23,14 @@ A giant mirror ball spins in a dark club. Its windows are live thumbnails of the
 
 Tiles first load `i.ytimg.com/vi/<id>/mqdefault.jpg` thumbnails, then upgrade to **animated previews**; the fullscreen flyer upgrades to `maxresdefault.jpg` when available.
 
-### Animated tile previews (storyboards)
+### Animated tile previews
 
-Every window on the ball *plays* its video as a muted low-res fast-forward loop. This uses YouTube's **storyboard sprite sheets** (the seek-preview images every video has): one 800×450 sheet is a 5×5 grid of 160×90 frames sampled across the whole video — a ready-made flipbook atlas.
+Every window on the ball *plays* its video, muted, at low resolution. Two sources, best available wins:
+
+1. **Real motion (`an_webp` hover previews)** — ~3 s of consecutive real frames at ~10 fps, the clips YouTube shows on thumbnail hover. Available for most (not all) videos; URLs come from the channel page and are proxied via `GET /api/motion-preview?v=<id>`. The client decodes the animated WebP with the `ImageDecoder` API (Chromium) into a 160×90-cell atlas and plays it at its natural framerate.
+2. **Storyboard crossfade** — fallback for videos without a hover preview and for browsers without `ImageDecoder`. Storyboard frames are ~2 s apart in the source, so instead of hard cuts (which read as sped-up or laggy) each frame holds ~1.3–2.2 s and dissolves into the next via a small crossfade shader.
+
+Storyboard sprite sheets are the seek-preview images every video has: one 800×450 sheet is a 5×5 grid of 160×90 frames sampled across the whole video — a ready-made flipbook atlas.
 
 - The sheet URL (signed) comes from the watch page's `playerStoryboardSpecRenderer.spec`. Watch pages are bot-walled from datacenter IPs, so specs are resolved **at build time** from a developer machine into `src/server/storyboard-snapshot.json` (`node scripts/resolve-storyboards.mjs`); the runtime falls back to live resolution only for ids missing from the snapshot (e.g. videos published after the last deploy — those show static thumbnails until the next snapshot refresh).
 - `GET /api/storyboard-image?v=<id>` proxies the sheet bytes (i.ytimg.com sends no CORS headers, so the browser can't texture from it directly) with a long CDN cache.

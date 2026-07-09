@@ -1,7 +1,10 @@
 import type { APIRoute } from "astro";
 import {
+  extractMotionUrls,
   getCachedStoryboardMeta,
+  hasMotionPreview,
   resolveSomeStoryboards,
+  setMotionPreviewUrls,
   YT_HEADERS,
   YT_UA,
   type StoryboardMeta,
@@ -17,6 +20,7 @@ export interface VideoItem {
   title: string;
   durationSeconds: number | null;
   storyboard?: StoryboardMeta | null;
+  motionPreview?: boolean;
 }
 
 let cache: { at: number; videos: VideoItem[] } | null = null;
@@ -40,6 +44,7 @@ async function fetchFromVideosTab(): Promise<VideoItem[]> {
   });
   if (!res.ok) throw new Error(`videos tab HTTP ${res.status}`);
   const html = await res.text();
+  setMotionPreviewUrls(extractMotionUrls(html));
   const match = html.match(/var ytInitialData = (\{.*?\});<\/script>/s);
   if (!match) throw new Error("ytInitialData not found");
   const data = JSON.parse(match[1]);
@@ -123,6 +128,7 @@ export const GET: APIRoute = async () => {
   const payload = current.map((v) => ({
     ...v,
     storyboard: getCachedStoryboardMeta(v.id),
+    motionPreview: hasMotionPreview(v.id),
   }));
 
   return new Response(JSON.stringify({ videos: payload }), {

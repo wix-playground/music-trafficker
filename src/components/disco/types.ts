@@ -10,4 +10,5 @@ export interface VideoItem {
   title: string;
   durationSeconds: number | null;
   storyboard?: StoryboardMeta | null;
+  motionPreview?: boolean;
 }

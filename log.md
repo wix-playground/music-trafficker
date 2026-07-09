@@ -2,6 +2,13 @@
 
 Date: 2026-07-09
 
+## Update 3 (same day): natural-speed previews
+
+User feedback: fast storyboard playback looked sped-up (frames are ~2 s apart in the source), slow playback looked laggy. Fix is two-tier:
+- **Real motion**: 18/30 videos have YouTube `an_webp` hover previews (~3 s of consecutive frames @ ~10 fps). Proxied via `/api/motion-preview`, decoded client-side with `ImageDecoder` (Chromium; falls back below elsewhere) into 160×90 atlases, played at natural speed.
+- **Crossfade**: remaining videos (and non-Chromium browsers) show storyboard frames that hold ~1.3–2.2 s and dissolve into each other via a small shader — no hard cuts.
+Also fixed a stale-CDN issue: an early release let `/api/videos` be cached for 1 h; the client now uses a versioned URL (`?rev=2`).
+
 ## Update 2 (same day): animated tiles + live feed
 
 - **Animated previews**: every window now plays its video as a muted 160×90 fast-forward loop, built from YouTube storyboard sprite sheets (one 5×5 sheet per video, animated by UV offsets — no decoding, works in all browsers). Watch pages turned out to be bot-walled from the Wix datacenter egress (consent/captcha stub, verified with a temporary debug endpoint), so the signed sheet URLs are resolved at build time from this machine into `src/server/storyboard-snapshot.json` (`scripts/resolve-storyboards.mjs`) with live resolution kept as a fallback for post-deploy videos. Sheets are proxied via `/api/storyboard-image` (upstream has no CORS headers). Verified live: 30/30 videos animated.

@@ -9,6 +9,13 @@ import {
 } from "@react-three/drei";
 import { EffectComposer, Bloom, Vignette } from "@react-three/postprocessing";
 import type { VideoItem } from "./types";
+import {
+  buildMotionAtlas,
+  makeMotionPresentation,
+  makeStoryboardPresentation,
+  makeThumbPresentation,
+  type TilePresentation,
+} from "./presentations";
 
 export interface SceneApi {
   flyBack: () => void;
@@ -23,12 +30,9 @@ interface DiscoSceneProps {
   onLanded: () => void;
 }
 
+import { CROP_REPEAT_X, THUMB_ASPECT, WINDOW_H, WINDOW_W } from "./presentations";
+
 const BALL_RADIUS = 2;
-const THUMB_ASPECT = 16 / 9;
-const WINDOW_W = 0.62;
-const WINDOW_H = 0.4;
-const WINDOW_ASPECT = WINDOW_W / WINDOW_H;
-const CROP_REPEAT_X = WINDOW_ASPECT / THUMB_ASPECT;
 const SPIN_SPEED = 0.14;
 const FLY_OUT_SECONDS = 1.05;
 const FLY_BACK_SECONDS = 0.8;
@@ -127,26 +131,7 @@ function buildMirrorMatrices(windowSlots: WindowSlot[]): THREE.Matrix4[] {
 const easeInOutCubic = (t: number) =>
   t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
 
-interface FlipbookAnimator {
-  texture: THREE.Texture;
-  cols: number;
-  rows: number;
-  frames: number;
-  frame: number;
-  acc: number;
-  fps: number;
-}
-
-function applyFlipbookFrame(fb: FlipbookAnimator) {
-  const cellW = 1 / fb.cols;
-  const cellH = 1 / fb.rows;
-  const col = fb.frame % fb.cols;
-  const row = Math.floor(fb.frame / fb.cols);
-  fb.texture.offset.set(
-    col * cellW + (cellW * (1 - CROP_REPEAT_X)) / 2,
-    1 - cellH * (row + 1),
-  );
-}
+const TIER_RANK = { thumb: 0, storyboard: 1, motion: 2 } as const;
 
 interface FlightState {
   mode: "idle" | "out" | "hold" | "back";
@@ -159,13 +144,13 @@ interface FlightState {
 function VideoWindow({
   slot,
   video,
-  texture,
+  material,
   hidden,
   onActivate,
 }: {
   slot: WindowSlot;
   video: VideoItem;
-  texture: THREE.Texture;
+  material: THREE.Material;
   hidden: boolean;
   onActivate: (video: VideoItem, mesh: THREE.Mesh) => void;
 }) {
@@ -205,7 +190,7 @@ function VideoWindow({
       }}
     >
       <planeGeometry args={[1, 1]} />
-      <meshBasicMaterial map={texture} />
+      <primitive object={material} attach="material" />
     </mesh>
   );
 }
@@ -246,7 +231,7 @@ export default function DiscoScene({
   const thumbsRef = useRef(
     new Map<string, { base: THREE.Texture; cropped: THREE.Texture }>(),
   );
-  const flipbooksRef = useRef(new Map<string, FlipbookAnimator>());
+  const presentationsRef = useRef(new Map<string, TilePresentation>());
   const loadingRef = useRef(new Set<string>());
   const [, setTextureVersion] = useState(0);
   const bumpTextures = () => setTextureVersion((v) => v + 1);
@@ -255,7 +240,7 @@ export default function DiscoScene({
     const loader = new THREE.TextureLoader();
     const wanted = new Set(videos.map((v) => v.id));
 
-    // Drop textures of videos that left the feed.
+    // Drop resources of videos that left the feed.
     for (const [id, entry] of thumbsRef.current) {
       if (!wanted.has(id)) {
         entry.base.dispose();
@@ -263,15 +248,64 @@ export default function DiscoScene({
         thumbsRef.current.delete(id);
       }
     }
-    for (const [id, fb] of flipbooksRef.current) {
+    for (const [id, pres] of presentationsRef.current) {
       if (!wanted.has(id)) {
-        fb.texture.dispose();
-        flipbooksRef.current.delete(id);
+        pres.dispose();
+        presentationsRef.current.delete(id);
       }
     }
 
+    const setPresentation = (id: string, next: TilePresentation) => {
+      const current = presentationsRef.current.get(id);
+      if (current && TIER_RANK[current.tier] >= TIER_RANK[next.tier]) {
+        next.dispose();
+        return;
+      }
+      current?.dispose();
+      presentationsRef.current.set(id, next);
+      bumpTextures();
+    };
+
+    const upgradeToStoryboard = (video: VideoItem) => {
+      const sb = video.storyboard;
+      const key = `sb:${video.id}`;
+      const current = presentationsRef.current.get(video.id);
+      if (!sb || loadingRef.current.has(key)) return;
+      if (current && TIER_RANK[current.tier] >= TIER_RANK.storyboard) return;
+      loadingRef.current.add(key);
+      loader.load(
+        `/api/storyboard-image?v=${video.id}`,
+        (tex) => {
+          loadingRef.current.delete(key);
+          tex.colorSpace = THREE.SRGBColorSpace;
+          // No mipmaps: atlas cells would bleed into each other at glancing angles.
+          tex.generateMipmaps = false;
+          tex.minFilter = THREE.LinearFilter;
+          setPresentation(video.id, makeStoryboardPresentation(tex, sb));
+        },
+        undefined,
+        () => loadingRef.current.delete(key),
+      );
+    };
+
+    const upgradeToMotion = async (video: VideoItem) => {
+      const key = `motion:${video.id}`;
+      if (loadingRef.current.has(key)) return;
+      const current = presentationsRef.current.get(video.id);
+      if (current && TIER_RANK[current.tier] >= TIER_RANK.motion) return;
+      loadingRef.current.add(key);
+      const atlas = await buildMotionAtlas(video.id);
+      loadingRef.current.delete(key);
+      if (atlas) {
+        setPresentation(video.id, makeMotionPresentation(atlas.grid, atlas.fps));
+      } else {
+        loadingRef.current.add(key); // don't retry a failed/unsupported build
+        upgradeToStoryboard(video);
+      }
+    };
+
     for (const video of videos) {
-      // Static thumbnail (window fallback + flyer source).
+      // Static thumbnail (initial window look + flyer source).
       const thumbKey = `thumb:${video.id}`;
       if (!thumbsRef.current.has(video.id) && !loadingRef.current.has(thumbKey)) {
         loadingRef.current.add(thumbKey);
@@ -286,6 +320,12 @@ export default function DiscoScene({
             cropped.offset.set((1 - CROP_REPEAT_X) / 2, 0);
             cropped.needsUpdate = true;
             thumbsRef.current.set(video.id, { base, cropped });
+            if (!presentationsRef.current.has(video.id)) {
+              presentationsRef.current.set(
+                video.id,
+                makeThumbPresentation(cropped),
+              );
+            }
             bumpTextures();
           },
           undefined,
@@ -293,37 +333,10 @@ export default function DiscoScene({
         );
       }
 
-      // Animated storyboard flipbook (whole video as a fast-forward loop).
-      const sb = video.storyboard;
-      const sbKey = `sb:${video.id}`;
-      if (sb && !flipbooksRef.current.has(video.id) && !loadingRef.current.has(sbKey)) {
-        loadingRef.current.add(sbKey);
-        loader.load(
-          `/api/storyboard-image?v=${video.id}`,
-          (tex) => {
-            loadingRef.current.delete(sbKey);
-            tex.colorSpace = THREE.SRGBColorSpace;
-            // No mipmaps: atlas cells would bleed into each other at glancing angles.
-            tex.generateMipmaps = false;
-            tex.minFilter = THREE.LinearFilter;
-            const animator: FlipbookAnimator = {
-              texture: tex,
-              cols: sb.cols,
-              rows: sb.rows,
-              frames: Math.max(1, sb.frames),
-              frame: Math.floor(Math.random() * sb.frames),
-              acc: Math.random() * 0.12,
-              fps: 2.5 + Math.random() * 1.5,
-            };
-            tex.repeat.set((CROP_REPEAT_X * 1) / sb.cols, 1 / sb.rows);
-            applyFlipbookFrame(animator);
-            flipbooksRef.current.set(video.id, animator);
-            bumpTextures();
-          },
-          undefined,
-          () => loadingRef.current.delete(sbKey),
-        );
-      }
+      // Upgrade path: real-motion preview where available, else crossfading
+      // storyboard frames.
+      if (video.motionPreview) upgradeToMotion(video);
+      else upgradeToStoryboard(video);
     }
   }, [videos]);
 
@@ -333,9 +346,9 @@ export default function DiscoScene({
         entry.base.dispose();
         entry.cropped.dispose();
       }
-      for (const fb of flipbooksRef.current.values()) fb.texture.dispose();
+      for (const pres of presentationsRef.current.values()) pres.dispose();
       thumbsRef.current.clear();
-      flipbooksRef.current.clear();
+      presentationsRef.current.clear();
     },
     [],
   );
@@ -471,16 +484,8 @@ export default function DiscoScene({
       THREE.MathUtils.damp(currentLen, introZ, 4, delta),
     );
 
-    // Advance the storyboard flipbooks (each window "plays" its video).
-    for (const fb of flipbooksRef.current.values()) {
-      fb.acc += delta;
-      const step = 1 / fb.fps;
-      if (fb.acc >= step) {
-        fb.frame = (fb.frame + Math.floor(fb.acc / step)) % fb.frames;
-        fb.acc %= step;
-        applyFlipbookFrame(fb);
-      }
-    }
+    // Advance every tile's preview (real motion or crossfading storyboard).
+    for (const pres of presentationsRef.current.values()) pres.update(delta);
 
     // Orbiting club lights.
     spot1.current?.position.set(Math.cos(t * 0.45) * 7, 4, Math.sin(t * 0.45) * 7);
@@ -595,16 +600,14 @@ export default function DiscoScene({
           {windowSlots.map((slot, i) => {
             const video = videos[slot.videoIndex];
             if (!video) return null;
-            const texture =
-              flipbooksRef.current.get(video.id)?.texture ??
-              thumbsRef.current.get(video.id)?.cropped;
-            if (!texture) return null;
+            const material = presentationsRef.current.get(video.id)?.material;
+            if (!material) return null;
             return (
               <VideoWindow
                 key={i}
                 slot={slot}
                 video={video}
-                texture={texture}
+                material={material}
                 hidden={false}
                 onActivate={startFlight}
               />
