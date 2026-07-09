@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import {
   Environment,
@@ -157,6 +157,15 @@ function VideoWindow({
   const ref = useRef<THREE.Mesh>(null);
   const hover = useRef(0);
 
+  // The material is shared by every window of the same video. Assign it
+  // imperatively: mounting one object through multiple <primitive> elements
+  // corrupts R3F's attach bookkeeping and leaves some windows on a stale
+  // material.
+  useLayoutEffect(() => {
+    const mesh = ref.current;
+    if (mesh) mesh.material = material;
+  }, [material]);
+
   useFrame((_, delta) => {
     const mesh = ref.current;
     if (!mesh) return;
@@ -190,7 +199,6 @@ function VideoWindow({
       }}
     >
       <planeGeometry args={[1, 1]} />
-      <primitive object={material} attach="material" />
     </mesh>
   );
 }
