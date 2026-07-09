@@ -2,6 +2,12 @@
 
 Date: 2026-07-09
 
+## Update 2 (same day): animated tiles + live feed
+
+- **Animated previews**: every window now plays its video as a muted 160×90 fast-forward loop, built from YouTube storyboard sprite sheets (one 5×5 sheet per video, animated by UV offsets — no decoding, works in all browsers). Watch pages turned out to be bot-walled from the Wix datacenter egress (consent/captcha stub, verified with a temporary debug endpoint), so the signed sheet URLs are resolved at build time from this machine into `src/server/storyboard-snapshot.json` (`scripts/resolve-storyboards.mjs`) with live resolution kept as a fallback for post-deploy videos. Sheets are proxied via `/api/storyboard-image` (upstream has no CORS headers). Verified live: 30/30 videos animated.
+- **Auto-update**: feed cache dropped to 15 min; the client polls `/api/videos` and hot-swaps added/removed videos into the ball without remounting the scene (swap deferred while a video is playing/flying). New videos appear at most ~20 min after publish — but animate only after the next snapshot refresh + deploy (static thumbnail until then). If YouTube storyboard signatures ever expire, affected tiles silently fall back to static thumbnails.
+- **Fix (user report)**: mirror facets could poke through video windows — the radius jitter reached the window plane height. Jitter now clamps every facet below the window backings.
+
 ## What was set up
 
 - **Wix Headless site + Astro project** scaffolded with `npm create @wix/new@latest` (business name "Music Trafficker", blank template). Site id `4df484c7-bb1c-4d2f-990f-0ddf48f7b1ea`. The scaffold's own git-commit step failed (no global git identity on this machine) — expected; fixed with a repo-local `git config`.

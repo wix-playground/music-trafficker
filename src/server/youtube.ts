@@ -1,3 +1,5 @@
+import snapshot from "./storyboard-snapshot.json";
+
 export const YT_UA =
   "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126 Safari/537.36";
 
@@ -33,7 +35,8 @@ function isFresh(entry: SbEntry) {
 
 export function getCachedStoryboardMeta(id: string): StoryboardMeta | null {
   const entry = sbCache.get(id);
-  return entry && isFresh(entry) ? entry.meta : null;
+  if (entry && isFresh(entry)) return entry.meta;
+  return SNAPSHOT[id]?.meta ?? null;
 }
 
 /**
@@ -86,9 +89,27 @@ async function resolveStoryboard(id: string): Promise<SbEntry> {
   }
 }
 
+const SNAPSHOT = snapshot as Record<
+  string,
+  { sheetUrl: string; meta: StoryboardMeta }
+>;
+
 export async function getStoryboardEntry(id: string): Promise<SbEntry> {
   const cached = sbCache.get(id);
   if (cached && isFresh(cached)) return cached;
+  // Build-time snapshot first: watch pages are bot-walled from datacenter
+  // IPs, so live resolution only stands a chance for videos published after
+  // the last deploy (and in local dev).
+  const snap = SNAPSHOT[id];
+  if (snap) {
+    const entry: SbEntry = {
+      at: Date.now(),
+      sheetUrl: snap.sheetUrl,
+      meta: snap.meta,
+    };
+    sbCache.set(id, entry);
+    return entry;
+  }
   let pending = inFlight.get(id);
   if (!pending) {
     pending = resolveStoryboard(id).finally(() => inFlight.delete(id));

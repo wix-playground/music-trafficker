@@ -21,7 +21,19 @@ A giant mirror ball spins in a dark club. Its windows are live thumbnails of the
 2. **Fallback** — if parsing fails (YouTube markup change, consent wall), it falls back to the channel RSS feed (`youtube.com/feeds/videos.xml?channel_id=…`, latest ~15 items). Because RSS mixes in Shorts, each item is probed with a `HEAD` request to `/shorts/<id>` — a `200` there means it's a Short and it gets dropped.
 3. Anything shorter than 90 seconds is also filtered out, results are cached in memory for 1 hour, and the response carries `Cache-Control: s-maxage=3600`.
 
-Tiles use `i.ytimg.com/vi/<id>/mqdefault.jpg` thumbnails as the "low-quality preview" textures; the fullscreen flyer upgrades to `maxresdefault.jpg` when available.
+Tiles first load `i.ytimg.com/vi/<id>/mqdefault.jpg` thumbnails, then upgrade to **animated previews**; the fullscreen flyer upgrades to `maxresdefault.jpg` when available.
+
+### Animated tile previews (storyboards)
+
+Every window on the ball *plays* its video as a muted low-res fast-forward loop. This uses YouTube's **storyboard sprite sheets** (the seek-preview images every video has): one 800×450 sheet is a 5×5 grid of 160×90 frames sampled across the whole video — a ready-made flipbook atlas.
+
+- The sheet URL (signed) comes from the watch page's `playerStoryboardSpecRenderer.spec`. Watch pages are bot-walled from datacenter IPs, so specs are resolved **at build time** from a developer machine into `src/server/storyboard-snapshot.json` (`node scripts/resolve-storyboards.mjs`); the runtime falls back to live resolution only for ids missing from the snapshot (e.g. videos published after the last deploy — those show static thumbnails until the next snapshot refresh).
+- `GET /api/storyboard-image?v=<id>` proxies the sheet bytes (i.ytimg.com sends no CORS headers, so the browser can't texture from it directly) with a long CDN cache.
+- The client loads each sheet as one texture and animates it by shifting UV offsets over the grid (~8–12 fps, staggered per video) — zero per-frame uploads or decoding.
+
+### Live feed auto-update
+
+The server re-scrapes the channel every 15 minutes; the client re-polls `/api/videos` (every 10 s until all storyboards are attached, then every 5 minutes) and hot-swaps new videos into the ball without remounting the scene — a swap is deferred while a video is playing.
 
 ## The 3D scene
 
