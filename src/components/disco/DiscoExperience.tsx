@@ -5,22 +5,74 @@ import type { VideoItem } from "./types";
 
 type Phase = "idle" | "flying" | "playing" | "closing";
 
+const FAST_POLL_MS = 10_000; // while storyboards are still resolving
+const SLOW_POLL_MS = 5 * 60_000; // steady state: pick up newly published videos
+const MAX_FAST_POLLS = 40;
+
+function feedChanged(current: VideoItem[] | null, incoming: VideoItem[]) {
+  if (!current || current.length !== incoming.length) return true;
+  return incoming.some(
+    (v, i) =>
+      v.id !== current[i].id || !!v.storyboard !== !!current[i].storyboard,
+  );
+}
+
 export default function DiscoExperience() {
   const [videos, setVideos] = useState<VideoItem[] | null>(null);
   const [failed, setFailed] = useState(false);
   const [phase, setPhase] = useState<Phase>("idle");
   const [active, setActive] = useState<VideoItem | null>(null);
   const sceneApi = useRef<SceneApi | null>(null);
+  const videosRef = useRef<VideoItem[] | null>(null);
+  const phaseRef = useRef<Phase>("idle");
+  const pendingVideosRef = useRef<VideoItem[] | null>(null);
+  phaseRef.current = phase;
+
+  const applyVideos = useCallback((list: VideoItem[]) => {
+    videosRef.current = list;
+    // Swapping the list mid-flight would yank the tile out from under the
+    // animation — defer to the next idle moment.
+    if (phaseRef.current === "idle") setVideos(list);
+    else pendingVideosRef.current = list;
+  }, []);
 
   useEffect(() => {
-    fetch("/api/videos")
-      .then((r) => r.json())
-      .then((data) => {
-        if (data?.videos?.length) setVideos(data.videos);
-        else setFailed(true);
-      })
-      .catch(() => setFailed(true));
-  }, []);
+    let stopped = false;
+    let timer: number | undefined;
+    let fastPolls = 0;
+
+    const tick = async (isFirst: boolean) => {
+      let nextDelay = SLOW_POLL_MS;
+      try {
+        const data = await (await fetch("/api/videos")).json();
+        const incoming: VideoItem[] = data?.videos ?? [];
+        if (stopped) return;
+        if (incoming.length > 0) {
+          if (feedChanged(videosRef.current, incoming)) applyVideos(incoming);
+          const incomplete = incoming.some((v) => !v.storyboard);
+          if (incomplete && fastPolls < MAX_FAST_POLLS) {
+            fastPolls++;
+            nextDelay = FAST_POLL_MS;
+          }
+        } else if (isFirst) {
+          setFailed(true);
+          return;
+        }
+      } catch {
+        if (isFirst) {
+          setFailed(true);
+          return;
+        }
+      }
+      timer = window.setTimeout(() => tick(false), nextDelay);
+    };
+
+    tick(true);
+    return () => {
+      stopped = true;
+      window.clearTimeout(timer);
+    };
+  }, [applyVideos]);
 
   const handleTakeoff = useCallback((video: VideoItem) => {
     setActive(video);
@@ -32,6 +84,10 @@ export default function DiscoExperience() {
   const handleLanded = useCallback(() => {
     setActive(null);
     setPhase("idle");
+    if (pendingVideosRef.current) {
+      setVideos(pendingVideosRef.current);
+      pendingVideosRef.current = null;
+    }
   }, []);
 
   const close = useCallback(() => {

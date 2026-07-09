@@ -1,20 +1,27 @@
 import type { APIRoute } from "astro";
+import {
+  getCachedStoryboardMeta,
+  resolveSomeStoryboards,
+  YT_HEADERS,
+  YT_UA,
+  type StoryboardMeta,
+} from "../../server/youtube";
 
 const CHANNEL_HANDLE = "MusicTrafficker";
 const CHANNEL_ID = "UC5D9N79IcFdrPGoymBThZZA";
-const CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
+const CACHE_TTL_MS = 15 * 60 * 1000; // refresh the channel feed every 15 min
 const MIN_DURATION_SECONDS = 90; // anything shorter is treated as a Short
 
 export interface VideoItem {
   id: string;
   title: string;
   durationSeconds: number | null;
+  storyboard?: StoryboardMeta | null;
 }
 
 let cache: { at: number; videos: VideoItem[] } | null = null;
 
-const UA =
-  "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126 Safari/537.36";
+const UA = YT_UA;
 
 function parseDuration(text: string): number | null {
   const parts = text.split(":").map((p) => parseInt(p, 10));
@@ -29,11 +36,7 @@ function parseDuration(text: string): number | null {
  */
 async function fetchFromVideosTab(): Promise<VideoItem[]> {
   const res = await fetch(`https://www.youtube.com/@${CHANNEL_HANDLE}/videos`, {
-    headers: {
-      "User-Agent": UA,
-      "Accept-Language": "en",
-      Cookie: "CONSENT=YES+; SOCS=CAI",
-    },
+    headers: YT_HEADERS,
   });
   if (!res.ok) throw new Error(`videos tab HTTP ${res.status}`);
   const html = await res.text();
@@ -112,10 +115,22 @@ export const GET: APIRoute = async () => {
     if (videos.length > 0) cache = { at: Date.now(), videos };
   }
 
-  return new Response(JSON.stringify({ videos: cache?.videos ?? [] }), {
+  const current = cache?.videos ?? [];
+  // Resolve a small batch of missing storyboard specs per request — the
+  // client polls until every video carries one, so the cache fills gradually
+  // without any single request blocking for long.
+  await resolveSomeStoryboards(current.map((v) => v.id));
+  const payload = current.map((v) => ({
+    ...v,
+    storyboard: getCachedStoryboardMeta(v.id),
+  }));
+
+  return new Response(JSON.stringify({ videos: payload }), {
     headers: {
       "Content-Type": "application/json",
-      "Cache-Control": "public, max-age=300, s-maxage=3600",
+      // no-store: responses differ as the storyboard cache fills, and the
+      // client polls this endpoint to pick up newly published videos.
+      "Cache-Control": "no-store",
     },
   });
 };

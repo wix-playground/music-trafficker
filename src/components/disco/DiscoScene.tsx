@@ -1,6 +1,6 @@
 import * as THREE from "three";
-import { useEffect, useMemo, useRef } from "react";
-import { useFrame, useLoader, useThree } from "@react-three/fiber";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useFrame, useThree } from "@react-three/fiber";
 import {
   Environment,
   Lightformer,
@@ -107,7 +107,10 @@ function buildMirrorMatrices(windowSlots: WindowSlot[]): THREE.Matrix4[] {
     const stagger = rng() * 360;
     for (let i = 0; i < count; i++) {
       const lon = (i / count) * 360 + stagger;
-      const jitter = 0.985 + rng() * 0.03;
+      // Keep every mirror (center + tilted corners) strictly below the video
+      // windows (R+0.03) and their backing faces (R-0.01 + half depth), so no
+      // facet can ever poke through a video tile.
+      const jitter = 0.9875 + rng() * 0.0075;
       dummy.position.copy(sphericalPos(lat, lon, BALL_RADIUS * jitter));
       dummy.lookAt(0, 0, 0);
       dummy.rotateY(Math.PI);
@@ -123,6 +126,27 @@ function buildMirrorMatrices(windowSlots: WindowSlot[]): THREE.Matrix4[] {
 
 const easeInOutCubic = (t: number) =>
   t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+
+interface FlipbookAnimator {
+  texture: THREE.Texture;
+  cols: number;
+  rows: number;
+  frames: number;
+  frame: number;
+  acc: number;
+  fps: number;
+}
+
+function applyFlipbookFrame(fb: FlipbookAnimator) {
+  const cellW = 1 / fb.cols;
+  const cellH = 1 / fb.rows;
+  const col = fb.frame % fb.cols;
+  const row = Math.floor(fb.frame / fb.cols);
+  fb.texture.offset.set(
+    col * cellW + (cellW * (1 - CROP_REPEAT_X)) / 2,
+    1 - cellH * (row + 1),
+  );
+}
 
 interface FlightState {
   mode: "idle" | "out" | "hold" | "back";
@@ -216,24 +240,104 @@ export default function DiscoScene({
   const activeWindowRef = useRef<THREE.Mesh | null>(null);
   const hiResRequestRef = useRef<string | null>(null);
 
-  const thumbUrls = useMemo(
-    () => videos.map((v) => `https://i.ytimg.com/vi/${v.id}/mqdefault.jpg`),
-    [videos],
+  // Textures are managed imperatively (not via useLoader/Suspense) so the
+  // video list can be hot-swapped by the feed poller without unmounting the
+  // scene: existing textures stay live while new ones stream in.
+  const thumbsRef = useRef(
+    new Map<string, { base: THREE.Texture; cropped: THREE.Texture }>(),
   );
-  const baseTextures = useLoader(THREE.TextureLoader, thumbUrls);
+  const flipbooksRef = useRef(new Map<string, FlipbookAnimator>());
+  const loadingRef = useRef(new Set<string>());
+  const [, setTextureVersion] = useState(0);
+  const bumpTextures = () => setTextureVersion((v) => v + 1);
 
-  const croppedTextures = useMemo(
-    () =>
-      baseTextures.map((tex) => {
-        tex.colorSpace = THREE.SRGBColorSpace;
-        tex.anisotropy = 4;
-        const cropped = tex.clone();
-        cropped.repeat.set(CROP_REPEAT_X, 1);
-        cropped.offset.set((1 - CROP_REPEAT_X) / 2, 0);
-        cropped.needsUpdate = true;
-        return cropped;
-      }),
-    [baseTextures],
+  useEffect(() => {
+    const loader = new THREE.TextureLoader();
+    const wanted = new Set(videos.map((v) => v.id));
+
+    // Drop textures of videos that left the feed.
+    for (const [id, entry] of thumbsRef.current) {
+      if (!wanted.has(id)) {
+        entry.base.dispose();
+        entry.cropped.dispose();
+        thumbsRef.current.delete(id);
+      }
+    }
+    for (const [id, fb] of flipbooksRef.current) {
+      if (!wanted.has(id)) {
+        fb.texture.dispose();
+        flipbooksRef.current.delete(id);
+      }
+    }
+
+    for (const video of videos) {
+      // Static thumbnail (window fallback + flyer source).
+      const thumbKey = `thumb:${video.id}`;
+      if (!thumbsRef.current.has(video.id) && !loadingRef.current.has(thumbKey)) {
+        loadingRef.current.add(thumbKey);
+        loader.load(
+          `https://i.ytimg.com/vi/${video.id}/mqdefault.jpg`,
+          (base) => {
+            loadingRef.current.delete(thumbKey);
+            base.colorSpace = THREE.SRGBColorSpace;
+            base.anisotropy = 4;
+            const cropped = base.clone();
+            cropped.repeat.set(CROP_REPEAT_X, 1);
+            cropped.offset.set((1 - CROP_REPEAT_X) / 2, 0);
+            cropped.needsUpdate = true;
+            thumbsRef.current.set(video.id, { base, cropped });
+            bumpTextures();
+          },
+          undefined,
+          () => loadingRef.current.delete(thumbKey),
+        );
+      }
+
+      // Animated storyboard flipbook (whole video as a fast-forward loop).
+      const sb = video.storyboard;
+      const sbKey = `sb:${video.id}`;
+      if (sb && !flipbooksRef.current.has(video.id) && !loadingRef.current.has(sbKey)) {
+        loadingRef.current.add(sbKey);
+        loader.load(
+          `/api/storyboard-image?v=${video.id}`,
+          (tex) => {
+            loadingRef.current.delete(sbKey);
+            tex.colorSpace = THREE.SRGBColorSpace;
+            // No mipmaps: atlas cells would bleed into each other at glancing angles.
+            tex.generateMipmaps = false;
+            tex.minFilter = THREE.LinearFilter;
+            const animator: FlipbookAnimator = {
+              texture: tex,
+              cols: sb.cols,
+              rows: sb.rows,
+              frames: Math.max(1, sb.frames),
+              frame: Math.floor(Math.random() * sb.frames),
+              acc: Math.random() * 0.12,
+              fps: 8 + Math.random() * 4,
+            };
+            tex.repeat.set((CROP_REPEAT_X * 1) / sb.cols, 1 / sb.rows);
+            applyFlipbookFrame(animator);
+            flipbooksRef.current.set(video.id, animator);
+            bumpTextures();
+          },
+          undefined,
+          () => loadingRef.current.delete(sbKey),
+        );
+      }
+    }
+  }, [videos]);
+
+  useEffect(
+    () => () => {
+      for (const entry of thumbsRef.current.values()) {
+        entry.base.dispose();
+        entry.cropped.dispose();
+      }
+      for (const fb of flipbooksRef.current.values()) fb.texture.dispose();
+      thumbsRef.current.clear();
+      flipbooksRef.current.clear();
+    },
+    [],
   );
 
   // The flyer gets a fresh texture object per flight (and per hi-res upgrade):
@@ -291,8 +395,7 @@ export default function DiscoScene({
     f.mode = "out";
     activeWindowRef.current = mesh;
 
-    const index = videos.indexOf(video);
-    const base = baseTextures[index];
+    const base = thumbsRef.current.get(video.id)?.base;
     if (base) {
       const tex = base.clone();
       tex.needsUpdate = true;
@@ -367,6 +470,17 @@ export default function DiscoScene({
     camera.position.setLength(
       THREE.MathUtils.damp(currentLen, introZ, 4, delta),
     );
+
+    // Advance the storyboard flipbooks (each window "plays" its video).
+    for (const fb of flipbooksRef.current.values()) {
+      fb.acc += delta;
+      const step = 1 / fb.fps;
+      if (fb.acc >= step) {
+        fb.frame = (fb.frame + Math.floor(fb.acc / step)) % fb.frames;
+        fb.acc %= step;
+        applyFlipbookFrame(fb);
+      }
+    }
 
     // Orbiting club lights.
     spot1.current?.position.set(Math.cos(t * 0.45) * 7, 4, Math.sin(t * 0.45) * 7);
@@ -480,8 +594,11 @@ export default function DiscoScene({
           </instancedMesh>
           {windowSlots.map((slot, i) => {
             const video = videos[slot.videoIndex];
-            const texture = croppedTextures[slot.videoIndex];
-            if (!video || !texture) return null;
+            if (!video) return null;
+            const texture =
+              flipbooksRef.current.get(video.id)?.texture ??
+              thumbsRef.current.get(video.id)?.cropped;
+            if (!texture) return null;
             return (
               <VideoWindow
                 key={i}
