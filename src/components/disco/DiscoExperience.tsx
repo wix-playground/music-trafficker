@@ -44,7 +44,9 @@ export default function DiscoExperience() {
     const tick = async (isFirst: boolean) => {
       let nextDelay = SLOW_POLL_MS;
       try {
-        const data = await (await fetch("/api/videos")).json();
+        // rev param: distinct cache key — an early release let the CDN cache
+        // this endpoint for an hour; the bare URL may still serve that stale copy.
+        const data = await (await fetch("/api/videos?rev=2")).json();
         const incoming: VideoItem[] = data?.videos ?? [];
         if (stopped) return;
         if (incoming.length > 0) {
