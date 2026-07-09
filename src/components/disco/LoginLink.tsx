@@ -1,4 +1,19 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+
+/**
+ * Reset a navigation-busy flag when the page is restored from the
+ * back/forward cache — e.g. the user closed the Wix login dialog and came
+ * back, with React state frozen at "Redirecting…".
+ */
+export function useResetOnPageShow(setBusy: (v: boolean) => void) {
+  useEffect(() => {
+    const onPageShow = (e: PageTransitionEvent) => {
+      if (e.persisted) setBusy(false);
+    };
+    window.addEventListener("pageshow", onPageShow);
+    return () => window.removeEventListener("pageshow", onPageShow);
+  }, [setBusy]);
+}
 
 /**
  * Login navigation takes a moment (redirect to the Wix-hosted login page) —
@@ -12,6 +27,7 @@ export default function LoginLink({
   label: string;
 }) {
   const [busy, setBusy] = useState(false);
+  useResetOnPageShow(setBusy);
   return (
     <a
       href="/api/auth/login?returnUrl=/"

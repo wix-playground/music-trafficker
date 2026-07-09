@@ -2,7 +2,7 @@ import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { Canvas } from "@react-three/fiber";
 import DiscoScene, { type SceneApi } from "./DiscoScene";
 import ThreadPopup from "./ThreadPopup";
-import LoginLink from "./LoginLink";
+import LoginLink, { useResetOnPageShow } from "./LoginLink";
 import type { VideoItem } from "./types";
 
 type Phase = "idle" | "flying" | "playing" | "closing";
@@ -13,6 +13,7 @@ const MAX_FAST_POLLS = 40;
 
 function LogoutForm({ name }: { name: string }) {
   const [busy, setBusy] = useState(false);
+  useResetOnPageShow(setBusy);
   return (
     <form
       method="POST"

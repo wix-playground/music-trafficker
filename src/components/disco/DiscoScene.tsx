@@ -488,9 +488,22 @@ export default function DiscoScene({
       easeInOutCubic(introRef.current),
     );
     const currentLen = camera.position.length();
-    camera.position.setLength(
-      THREE.MathUtils.damp(currentLen, introZ, 4, delta),
-    );
+    if (!Number.isFinite(currentLen) || currentLen < 3.2 || currentLen > 80) {
+      // Self-heal: a resize/interaction race left the camera in a bad spot
+      // (inside the ball, absurdly far, or NaN) — snap back to a sane pose.
+      camera.up.set(0, 1, 0);
+      camera.position.set(0, 0.35, fitZ);
+      camera.lookAt(0, 0, 0);
+    } else {
+      camera.position.setLength(
+        THREE.MathUtils.damp(currentLen, introZ, 4, delta),
+      );
+    }
+    if (camera.aspect !== aspect) {
+      // R3F updates this on resize, but guard against a missed event.
+      camera.aspect = aspect;
+      camera.updateProjectionMatrix();
+    }
 
     // Advance every tile's preview (real motion or crossfading storyboard).
     for (const pres of presentationsRef.current.values()) pres.update(delta);
