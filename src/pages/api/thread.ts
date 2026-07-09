@@ -1,6 +1,7 @@
 import type { APIRoute } from "astro";
 import { comments } from "@wix/comments";
 import { members } from "@wix/members";
+import { auth } from "@wix/essentials";
 import {
   BLOG_APP_ID,
   getThreadReference,
@@ -25,14 +26,16 @@ async function resolveAuthor(memberId: string | undefined) {
   const cached = authorCache.get(memberId);
   if (cached) return cached;
   try {
-    const { member } = await members.getMember(memberId, {
+    // Reading OTHER members' profiles is denied to visitor/member callers —
+    // elevate the lookup; only public profile fields (nickname, photo) are
+    // exposed to the client.
+    const elevatedGetMember = auth.elevate(members.getMember);
+    const result: any = await elevatedGetMember(memberId, {
       fieldsets: ["PUBLIC"] as any,
     });
+    const member = result?.member ?? result;
     const resolved = {
-      name:
-        member?.profile?.nickname ||
-        (member as any)?.profile?.name ||
-        "Member",
+      name: member?.profile?.nickname || member?.profile?.name || "Member",
       avatar: member?.profile?.photo?.url ?? null,
     };
     authorCache.set(memberId, resolved);
@@ -132,13 +135,25 @@ export const POST: APIRoute = async ({ request }) => {
   }
   try {
     const reference = await getThreadReference();
-    await comments.createComment({
+    const created: any = await comments.createComment({
       appId: BLOG_APP_ID,
       contextId: reference.referenceId,
       resourceId: reference.referenceId,
       content: { richContent: plainTextToRicos(text) as any },
     });
-    return new Response(JSON.stringify({ ok: true }), {
+    const comment = created?.comment ?? created;
+    // Return the created message so the client can show it immediately —
+    // the comments listing is eventually consistent and may lag a refetch.
+    const message: ThreadMessage = {
+      id: comment?._id ?? `local-${Date.now()}`,
+      text,
+      authorName: me.profile?.nickname || me.loginEmail || "Member",
+      authorAvatar: me.profile?.photo?.url ?? null,
+      createdAt: new Date().toISOString(),
+      edited: false,
+      mine: true,
+    };
+    return new Response(JSON.stringify({ ok: true, message }), {
       headers: { "Content-Type": "application/json" },
     });
   } catch (e) {

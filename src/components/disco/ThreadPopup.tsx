@@ -97,8 +97,25 @@ export default function ThreadPopup({ onClose }: { onClose: () => void }) {
         return;
       }
       if (!res.ok) throw new Error("post failed");
+      const body = await res.json().catch(() => null);
       setDraft("");
-      load();
+      if (body?.message) {
+        // Show the new message immediately — the comments listing is
+        // eventually consistent and a refetch may not include it yet.
+        setData((prev) =>
+          prev
+            ? {
+                ...prev,
+                messages: [
+                  body.message,
+                  ...prev.messages.filter((m) => m.id !== body.message.id),
+                ],
+              }
+            : prev,
+        );
+      } else {
+        load();
+      }
     } catch {
       setPostError("Couldn't post your message — try again.");
     } finally {
